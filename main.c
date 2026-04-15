@@ -1,14 +1,26 @@
 /*
- * lab14_yelvington.c
- *
- * Created: 4/1/2026 9:15:23 AM
+ * Voltage Reading
+ * Created: 3/21/2026 10:34:43 AM
  * Author : YELVINGM
  */ 
-#include <avr/io.h>
-#include <stdio.h>
-#include <util/delay.h>
-#define UART_UBRR_VALUE 12UL
+
 #define F_CPU 1000000UL
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdio.h>
+#define UART_UBRR_VALUE 12UL
+
+void adc_init() {
+	// Reads in 10-bits
+	ADCSRA |= (1<<ADPS1) | (1<<ADPS0); // Set ADC prescalar to 8 which is 125kHz with a sample rate of 1MHz
+
+	ADMUX |= (1<<REFS0); // Set ADC reference to AVCC
+
+	// Right adjust ADC result to allow easy 10 bit reading
+	ADMUX &= ~(1<<ADLAR);
+	
+	ADCSRA |= (1<<ADEN); // Enable ADC
+}
 
 void uart_init() {
 	/*Set Baud rate*/
@@ -32,36 +44,54 @@ void write_uart(char c[]) {
 	}while(*c != '\0');
 }
 
-int main() {
-	// Cole put the stepping sequences here and uncomment when you're done. The ones below don't work
-	
-	DDRB |= 0x0F; // Set Register B PINS 0-3 High, i.e. configure as output
-	int wave_steps[4]={0x01, 0x04, 0x08, 0x02}; // Set the stepping sequence of the stepper motor 
-	int full_steps[4]={0x03, 0x06, 0x0C, 0x09};
-	int half_steps[8]={0x01, 0x03, 0x02, 0x06, 0x04, 0x0C, 0x08, 0x09};
-	int i=0; // Initialize variable i
-	int cycles = 0;
-	
-	while(1) // Run the stepper motor forever
-	{
-	 PORTB &= 0xF0; // Turn off the stepper motor only
-	 _delay_ms(50); // Delay the time between turning off and on the motor
-	 PORTB |= wave_steps[i]; // Uncomment for Wave Mode
-	 // PORTB |= full_steps[i]; // Uncomment for Full Step Mode
-	 // PORTB |= half_steps[i]; // Uncomment for Half Step Mode
-	 _delay_ms(50); // Delay the time between the step and shutting off the motor
-	 i=(i+1)%4; // Setting the modulus so the stepping sequence repeats forever
-	 
-	 // Add to number of cycles  
-	 cycles++;
-	 
-	 // Sends Angular Displacement over UART
-	 char buffer[20];
-	 sprintf(buffer, "\n\r");
-	 uart_init();
-	 int disp = 1.8*cycles;
-	 sprintf(buffer, "\r\n%d degrees", disp);
-	 write_uart(buffer);
-	 _delay_ms(250);
+int analog(int channel) {
+	ADMUX &= 0xE0;  
+	ADMUX |= channel;
+	ADCSRA |= (1<<ADSC);
+	while (ADCSRA & (1<<ADSC));
+	int reading;
+	reading = ADCL | (ADCH<<8);
+	return reading;
+}
+
+int read_voltage(int channel) {
+	int counts = analog(channel);
+	int voltage = 5-(5*counts/1024);
+	return voltage;
+}
+
+int read_angle(int channel) {
+	// Read output of port B
+	// Add angular displacement for each cycle
+	// return angle
+}
+
+int read_temp(int channel) {
+	// Read counts from thermistor
+	// Convert to temperature
+	// Return temperature
+}
+
+int read_light(int channel) {
+	// Get counts from the current->voltage amplifier of the LED
+	// Return counts
+}
+
+int main(void) {
+	char buffer[20];
+	sprintf(buffer, "\n\r");
+	uart_init();
+	adc_init();
+
+	while(1) {
+		int voltage_reading = read_voltage(0);
+		// int temp_reading_1 = read_temp(1);
+		// int temp_reading_2 = read_temp(2);
+		// in angle_reading_1 = read_angle(3);
+		sprintf(buffer, "\r\n%d V \t %d K \t %d K", voltage_reading);
+		write_uart(buffer); 
+		_delay_ms(250);
 	}
 }
+
+
